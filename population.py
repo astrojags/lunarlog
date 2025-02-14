@@ -4,6 +4,20 @@ from enum import Enum
 import random
 from datetime import datetime, timedelta
 
+class NodeType(Enum):
+    """Defines all possible nodes in the space logistics network"""
+    EARTH = "Earth"
+    LEO = "Low_Earth_Orbit"
+    GEO = "Geostationary_Orbit"
+    LLO = "Low_Lunar_Orbit"
+    LUNAR_SURFACE = "Lunar_Surface"
+    LUNAR_SOUTH_POLE = "Lunar_South_Pole"
+    LUNAR_RESOURCE_1 = "Lunar_Resource_1"
+    LUNAR_RESOURCE_2 = "Lunar_Resource_2"
+    EML1 = "Earth_Moon_L1"
+    EML2 = "Earth_Moon_L2"
+    LMT = "Lunar_Mars_Transfer"
+    
 @dataclass
 class TimeWindow:
     """Represents a launch window with start and end times"""
@@ -25,7 +39,9 @@ class Payload:
     required_launch_window: TimeWindow
     precursor_payloads: List[str] = None  # IDs of payloads that must launch before
     co_payloads: List[str] = None  # IDs of payloads that must launch together
-    
+    origin: NodeType = NodeType.EARTH  # Default origin
+    destination: NodeType = NodeType.LUNAR_SURFACE  # Default destination
+
     def __post_init__(self):
         self.precursor_payloads = self.precursor_payloads or []
         self.co_payloads = self.co_payloads or []
@@ -73,14 +89,22 @@ class LaunchTimingGene:
             validated_times[payload_id] = time
         return validated_times
 
+
     def _initialize_random_times(self):
-        """Initialize random but valid launch times for all payloads"""
+    #"""Initialize random but valid launch times for all payloads"""
         # First, create a dependency graph to determine initialization order
         dependency_graph = self._create_dependency_graph()
-        
-        # Initialize in order of dependencies
-        for payload_id in self._topological_sort(dependency_graph):
-            payload = self.payload_map[payload_id]
+    
+        # Make sure we process all payloads
+        for payload_id in self.payload_map:
+            if payload_id not in self.launch_times:
+                payload = self.payload_map[payload_id]
+                launch_window = payload.required_launch_window
+                # Pick a random time within the window
+                self.launch_times[payload_id] = random.randint(
+                    launch_window.start, 
+                    launch_window.end
+                )
             
             # Calculate earliest possible launch time considering precursors
             earliest_time = payload.required_launch_window.start
@@ -1719,7 +1743,7 @@ class LaunchFrequencyGene:
         return violations
     
 
-    @dataclass
+@dataclass
 class MissionChromosome:
     """Represents a complete mission plan combining all genetic components"""
     launch_timing: LaunchTimingGene
