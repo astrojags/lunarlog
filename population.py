@@ -1717,3 +1717,144 @@ class LaunchFrequencyGene:
             if not self.is_launch_feasible(vehicle_id, launch_time):
                 violations.append((payload_id, launch_time))
         return violations
+    
+
+    @dataclass
+class MissionChromosome:
+    """Represents a complete mission plan combining all genetic components"""
+    launch_timing: LaunchTimingGene
+    payload_assignment: PayloadAssignmentGene
+    routing_flow: RoutingFlowGene
+    vehicle_stacking: VehicleStackingGene
+    propellant_resource: PropellantResourceGene
+    payload_constraints: PayloadConstraintsGene
+    launch_frequency: LaunchFrequencyGene
+    vehicle_utilization: VehicleUtilizationGene
+    
+    @classmethod
+    def generate_random(cls, 
+                       payload_map: Dict[str, Payload],
+                       vehicle_map: Dict[str, Vehicle],
+                       valid_routes: Dict[Tuple[NodeType, NodeType], List[Route]],
+                       max_campaign_duration: int) -> 'MissionChromosome':
+        """Generate a random but valid chromosome"""
+        # First create launch timing since other genes depend on it
+        launch_timing = LaunchTimingGene(payload_map)
+        
+        # Create payload assignments using launch timing
+        payload_assignment = PayloadAssignmentGene(
+            payload_map, 
+            vehicle_map, 
+            launch_timing
+        )
+        
+        # Create routing based on assignments
+        routing_flow = RoutingFlowGene(
+            payload_map,
+            vehicle_map,
+            launch_timing,
+            payload_assignment,
+            valid_routes
+        )
+        
+        # Create vehicle stacking strategy
+        vehicle_stacking = VehicleStackingGene(
+            payload_map,
+            vehicle_map,
+            payload_assignment,
+            stacking_rules={} # You'll need to define these rules
+        )
+        
+        # Create propellant resource allocation
+        propellant_resource = PropellantResourceGene(
+            vehicle_map,
+            launch_timing,
+            payload_assignment,
+            routing_flow
+        )
+        
+        # Create payload constraints manager
+        payload_constraints = PayloadConstraintsGene(
+            payload_map,
+            launch_timing
+        )
+        
+        # Create launch frequency manager
+        launch_frequency = LaunchFrequencyGene(
+            vehicle_map,
+            launch_timing,
+            payload_assignment
+        )
+        
+        # Create vehicle utilization tracker
+        vehicle_utilization = VehicleUtilizationGene(
+            vehicle_map,
+            launch_timing,
+            payload_assignment,
+            routing_flow,
+            max_campaign_duration
+        )
+        
+        return cls(
+            launch_timing=launch_timing,
+            payload_assignment=payload_assignment,
+            routing_flow=routing_flow,
+            vehicle_stacking=vehicle_stacking,
+            propellant_resource=propellant_resource,
+            payload_constraints=payload_constraints,
+            launch_frequency=launch_frequency,
+            vehicle_utilization=vehicle_utilization
+        )
+
+def generate_initial_population(size: int,
+                              payload_map: Dict[str, Payload],
+                              vehicle_map: Dict[str, Vehicle],
+                              valid_routes: Dict[Tuple[NodeType, NodeType], List[Route]],
+                              max_campaign_duration: int) -> List[MissionChromosome]:
+    """Generate initial population of valid chromosomes"""
+    population = []
+    
+    while len(population) < size:
+        try:
+            # Generate a random chromosome
+            chromosome = MissionChromosome.generate_random(
+                payload_map,
+                vehicle_map,
+                valid_routes,
+                max_campaign_duration
+            )
+            
+            # Verify chromosome is valid
+            if is_valid_chromosome(chromosome):
+                population.append(chromosome)
+                
+        except ValueError:
+            # If generation fails, try again
+            continue
+            
+    return population
+
+def is_valid_chromosome(chromosome: MissionChromosome) -> bool:
+    """Check if a chromosome satisfies all constraints"""
+    try:
+        # Check launch timing constraints
+        if not chromosome.payload_constraints.validate_launch_times():
+            return False
+            
+        # Check vehicle assignment feasibility
+        if not chromosome.vehicle_utilization.is_feasible():
+            return False
+            
+        # Check propellant constraints
+        if not chromosome.propellant_resource.is_feasible():
+            return False
+            
+        # Check launch frequency constraints
+        violations = chromosome.launch_frequency._find_schedule_violations()
+        if violations:
+            return False
+            
+        return True
+        
+    except Exception:
+        return False
