@@ -15,7 +15,7 @@ lass MissionFitnessEvaluator:
         self.propellant_resource_gene = propellant_resource_gene
         self.payload_constraints_gene = payload_constraints_gene
         self.launch_frequency_gene = launch_frequency_gene
-        
+
         # Penalty weights for different constraint violations
         self.penalty_weights = {
             'timing_violation': 10000,
