@@ -135,15 +135,73 @@ class MissionFitnessCalculator:
         overall_reliability = sum(reliability_scores) / len(reliability_scores)
         return max(0.0, min(1.0, overall_reliability))
     
-    def _get_vehicle_reliability(self, vehicle) -> float:
-        """Estimate vehicle reliability based on characteristics"""
-        # This could be expanded with actual vehicle reliability data
-        if "HEAVY" in vehicle.id:
-            return 0.95  # Example: Heavy vehicles slightly less reliable
-        elif "MEDIUM" in vehicle.id:
-            return 0.98
-        else:
-            return 0.96
+    def _calculate_route_complexity(self, route: Route, vehicle: Vehicle) -> float:
+    """
+    Calculate route complexity score based on multiple factors.
+    Returns a value between 0 and 1, where higher means more complex.
+    """
+    complexity_score = 0.0
+    
+    # Base complexity from number of segments
+    num_segments = len(route.arcs)
+    
+    # Analyze each arc
+    for arc in route.arcs:
+        # Delta-V complexity
+        delta_v_factor = arc.delta_v / 10000  # Normalize to typical LEO delta-v
+        
+        # Time of flight complexity
+        time_factor = arc.time_of_flight / 3  # Normalize to typical 3-day transfer
+        
+        # Node transition complexity
+        node_complexity = self._get_node_transition_complexity(
+            arc.origin, arc.destination)
+        
+        # Vehicle-specific complexity
+        vehicle_capability = 1.0
+        if vehicle.id not in arc.allowed_vehicles:
+            vehicle_capability = 0.0  # Impossible route
+        
+        # Combine factors for this arc
+        arc_complexity = (
+            0.4 * delta_v_factor +
+            0.3 * time_factor +
+            0.2 * node_complexity +
+            0.1 * vehicle_capability
+        )
+        
+        complexity_score += arc_complexity
+
+    # Average across all arcs and normalize
+    return complexity_score / num_segments
+
+    #def _get_node_transition_complexity(self, origin: NodeType, destination: NodeType) -> float:
+    #    """
+    #    Calculate complexity of transitioning between different types of nodes.
+    #    Returns a value between 0 and 1.
+    #   """
+    #    # Define complexity factors for different transitions
+    #    transition_complexity = {
+    #        (NodeType.EARTH, NodeType.LEO): 0.3,      # Standard LEO insertion
+    #        (NodeType.LEO, NodeType.LLO): 0.6,        # Trans-lunar injection
+    #       (NodeType.LLO, NodeType.LUNAR_SURFACE): 0.8,  # Lunar landing
+    #        (NodeType.LUNAR_SURFACE, NodeType.LLO): 0.7,  # Lunar ascent
+    #        (NodeType.LEO, NodeType.GEO): 0.5,        # GEO transfer
+    #        (NodeType.LLO, NodeType.EML1): 0.4,       # Lunar to L1
+    #        (NodeType.EML1, NodeType.EML2): 0.3,      # L1 to L2
+    #    }
+        
+    # Get complexity for this transition, default to high complexity if unknown
+    #return transition_complexity.get((origin, destination), 0.9)
+    #def _get_vehicle_reliability(self, vehicle) -> float:
+    #    """Estimate vehicle reliability based on characteristics"""
+    #    # This could be expanded with actual vehicle reliability data
+    #    if "HEAVY" in vehicle.id:
+    #        return 0.95  # Example: Heavy vehicles slightly less reliable
+    #    elif "MEDIUM" in vehicle.id:
+    #        return 0.98
+    #    else:
+    #        return 0.96
     
     def _get_resource_margin(self, 
                            chromosome: MissionChromosome, 
